@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Document</title>
+    <style>
+      ul,
+      div {
+        margin: 0;
+        padding: 0;
+      }
+      .relative {
+        position: relative;
+      }
+      th,
+      td {
+        padding: 0 8px;
+        text-align: center;
+      }
+      th {
+        font-size: 0.9em;
+      }
+      td {
+        font-size: 0.8em;
+      }
+      #match {
+        max-height: 150px;
+        width: 145px;
+        position: absolute;
+        overflow: scroll;
+        list-style: none;
+        border-bottom: 1px solid black;
+        box-shadow: 2px 2px 4px -2px black;
+        font-size: 0.8em;
+        background-color: white;
+      }
+      #match li {
+        line-height: 25px;
+        border-bottom: 1px solid rgb(230, 230, 230);
+      }
+    </style>
+    <script src="./js/vue.min.js"></script>
+    <script src="./js/jsonp.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <div class="container" style="display: none" v-show="t">
+        城市：
+        <div class="relative">
+          <!-- 键盘被按下触发数据调取 showLocation -->
+          <input
+            class="relative"
+            type="text"
+            v-model="iLocation"
+            placeholder="搜索市、区、县等"
+            v-on:keyup="showLocation"
+            v-on:focus="ls=true"
+          />
+          <ul
+            id="match"
+            v-show="(Object.keys(locations).length>0&&ls)"
+            v-on:click="ls=false"
+          >
+            <li
+              v-for="(item, name) in locations"
+              v-on:click="textFieldSub(name)"
+              :key="name"
+            >
+              {{item}}
+            </li>
+          </ul>
+        </div>
+        <div v-on:click="ls=false">
+          <p>{{forecast_24h[1].time}}</p>
+          <p>{{hLocation}}</p>
+          <table border="1">
+            <tr>
+              <th>时间</th>
+              <th>温度</th>
+              <th>天气</th>
+              <th>风向</th>
+              <th>风力</th>
+            </tr>
+
+            <tr v-for="(item, index) in forecast_1h">
+              <td>{{item.update_time|hour}}</td>
+              <td>{{item.degree}}</td>
+              <td>{{item.weather}}</td>
+              <td>{{item.wind_direction}}</td>
+              <td>{{item.wind_power}}</td>
+            </tr>
+
+            <tr id="date"></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      //数据请求调用的方法
+      function fn(obj) {
+        // console.log(obj.data.forecast_1h["0"]);
+        let app = new Vue({
+          el: "#app",
+          filters: {
+            hour: function (value) {
+              let d = value.slice(6, 8);
+              let h = value.slice(8, 10);
+              return d + "日" + h + ":00";
+            },
+            tr: function (value) {
+              console.log(value);
+            },
+          },
+          data: {
+            forecast_1h: obj.data.forecast_1h,
+            forecast_24h: obj.data.forecast_24h,
+            t: true,
+            ls: true,
+
+            locations: "",
+
+            iLocation: "",
+            //避免相同值触发
+            iLocationD: "",
+            hLocation: "北京",
+
+            province: "北京",
+            city: "北京",
+            county: "",
+
+            //储存setTimeout返回值
+            timeOut: 0,
+          },
+          methods: {
+            showLocation: function () {
+              //阻止多次触发
+              if (this.timeOut) {
+                clearTimeout(this.timeOut);
+              }
+              if (this.iLocation != this.iLocationD) {
+                this.timeOut = setTimeout(() => {
+                  jsonp({
+                    url: "https://wis.qq.com/city/like",
+                    data: {
+                      source: "pc",
+                      city: this.iLocation,
+                    },
+                    success: (obj) => {
+                      this._data.locations = obj.data;
+                    },
+                  });
+                  this._data.iLocationD = this._data.iLocation;
+                }, 300);
+              }
+            },
+            textFieldSub: function (fnName) {
+              console.log(this.locations[fnName]);
+              let l = this.locations[fnName].split(",");
+              console.log(l[2]);
+              this.province = l[0];
+              this.city = l[1];
+              if (l[2]) {
+                this.county = l[2];
+              } else {
+                this.county = "";
+              }
+              this.t = false;
+
+              console.log(jsonp);
+              jsonp({
+                url: "https://wis.qq.com/weather/common",
+                data: {
+                  source: "pc",
+                  weather_type: "forecast_1h|forecast_24h",
+                  province: this.province,
+                  city: this.city,
+                  county: this.county,
+                },
+                success: (obj) => {
+                  console.log(this._data.forecast_1h);
+                  this._data.forecast_1h = obj.data.forecast_1h;
+                  this._data.forecast_24h = obj.data.forecast_24h;
+                  this._data.t = true;
+                },
+              });
+
+              this.hint();
+            },
+            hint: function () {
+              let value = (this.county == "" ? this.city : this.county).trim();
+              if (value.includes("长沙") || value.includes("长沙县")) {
+                this.hLocation = "呀🌚，这不是" + value + "吗？";
+              } else {
+                this.hLocation = value;
+              }
+            },
+          },
+        });
+      }
+
+      //数据请求
+      jsonp({
+        url: "https://wis.qq.com/weather/common",
+        data: {
+          source: "pc",
+          weather_type: "forecast_1h|forecast_24h",
+          province: "北京",
+          city: "北京",
+          county: "",
+        },
+        success: fn,
+      });
+    </script>
+  </body>
+</html>
